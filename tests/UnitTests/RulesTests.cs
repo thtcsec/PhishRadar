@@ -90,4 +90,118 @@ public class RulesTests
         Assert.Contains("vietnamese_banking_phish", result.Tags);
         Assert.Contains("keyword_stuffing", result.Tags);
     }
+
+    // ===== NEW AI SEMANTIC ANALYSIS TESTS =====
+    
+    [Theory]
+    [InlineData("vietcombank-alert.com", "/otp", "Quý khách xác thực tài khoản khẩn cấp")]
+    [InlineData("secure-login.vn", "/verify", "tai khoan cua ban bi khoa, vui long xac thuc ngay")]
+    [InlineData("banking-update.xyz", "/urgent", "Ngân hàng thông báo tài khoản bị đình chỉ, xác thực ngay")]
+    public void AISemantic_Should_Flag_VN_Banking_Urgency(string host, string path, string text)
+    {
+        var rule = new AISemanticAnalysisRule();
+        var result = rule.Evaluate((host, path, text));
+        
+        Assert.True(result.Score >= 0.6, $"Score too low: {result.Score}");
+        Assert.True(result.Tags.Any(t => t.Contains("ai_semantic") || t.Contains("ai_pattern")), 
+                   $"Expected AI tags, got: {string.Join(",", result.Tags)}");
+        Assert.True(result.Tags.Any(t => t.Contains("banking") || t.Contains("urgency")), 
+                   $"Expected banking/urgency tags, got: {string.Join(",", result.Tags)}");
+    }
+
+    [Theory]
+    [InlineData("nohu-vip.club", "/", "Game bài đổi thưởng nổ hũ nhận quà")]
+    [InlineData("casino-online.net", "/game", "Đánh bạc online, cá độ bóng đá")]
+    [InlineData("slot-game.xyz", "/play", "no hu jackpot, doi thuong khung")]
+    public void AISemantic_Should_Flag_VN_Gambling(string host, string path, string text)
+    {
+        var rule = new AISemanticAnalysisRule();
+        var result = rule.Evaluate((host, path, text));
+        
+        Assert.True(result.Score >= 0.6, $"Score too low for gambling: {result.Score}");
+        Assert.True(result.Tags.Any(t => t.Contains("gambling") || t.Contains("ai_semantic")), 
+                   $"Expected gambling tags, got: {string.Join(",", result.Tags)}");
+    }
+
+    [Theory]
+    [InlineData("crypto-invest.com", "/", "Đầu tư Bitcoin lời khủng, wallet miễn phí")]
+    [InlineData("blockchain-profit.net", "/invest", "Crypto investment guaranteed profit")]
+    public void AISemantic_Should_Flag_Crypto_Scam(string host, string path, string text)
+    {
+        var rule = new AISemanticAnalysisRule();
+        var result = rule.Evaluate((host, path, text));
+        
+        Assert.True(result.Score >= 0.5, $"Score too low for crypto scam: {result.Score}");
+        Assert.True(result.Tags.Any(t => t.Contains("crypto") || t.Contains("ai_semantic")), 
+                   $"Expected crypto tags, got: {string.Join(",", result.Tags)}");
+    }
+
+    [Fact]
+    public void AISemantic_Should_Handle_Mixed_Vietnamese_English()
+    {
+        var rule = new AISemanticAnalysisRule();
+        var result = rule.Evaluate((
+            "vietcombank-secure.xyz", 
+            "/login/verify", 
+            "Anh chị vui lòng verify account immediately, OTP expired urgent"
+        ));
+        
+        Assert.True(result.Score >= 0.6, $"Mixed language score too low: {result.Score}");
+        Assert.True(result.Tags.Any(t => t.Contains("ai_vietnamese") || t.Contains("urgency")), 
+                   $"Expected Vietnamese/urgency tags, got: {string.Join(",", result.Tags)}");
+    }
+
+    [Fact] 
+    public void AISemantic_Should_Handle_Normalized_Diacritics()
+    {
+        var rule = new AISemanticAnalysisRule();
+        
+        // Test with diacritics
+        var resultWithDiacritics = rule.Evaluate((
+            "ngân-hàng.com", "/", "Tài khoản bị khóa, xác thực khẩn cấp"
+        ));
+        
+        // Test without diacritics (normalized)
+        var resultNormalized = rule.Evaluate((
+            "ngan-hang.com", "/", "Tai khoan bi khoa, xac thuc khan cap"
+        ));
+        
+        // Both should be detected similarly
+        Assert.True(resultWithDiacritics.Score >= 0.5, "Diacritics version not detected");
+        Assert.True(resultNormalized.Score >= 0.5, "Normalized version not detected");
+    }
+
+    [Fact]
+    public void AISemantic_Should_Not_Flag_Legitimate_Content()
+    {
+        var rule = new AISemanticAnalysisRule();
+        var result = rule.Evaluate((
+            "news.vnexpress.net", 
+            "/article", 
+            "Tin tức kinh tế Việt Nam, thị trường chứng khoán hôm nay"
+        ));
+        
+        Assert.True(result.Score < 0.4, $"Legitimate content scored too high: {result.Score}");
+    }
+
+    [Fact]
+    public void AISemantic_Should_Combine_Multiple_Signals()
+    {
+        var rule = new AISemanticAnalysisRule();
+        var result = rule.Evaluate((
+            "vietcombank-urgent.xyz", 
+            "/verify/otp", 
+            "Tài khoản ngân hàng bị khóa khẩn cấp, xác thực OTP ngay lập tức"
+        ));
+        
+        Assert.True(result.Score >= 0.7, $"Multiple signals score too low: {result.Score}");
+        
+        // Check if ai_multiple_signals is in any of the tag strings
+        var allTags = string.Join(",", result.Tags);
+        Assert.Contains("ai_multiple_signals", allTags);
+        
+        // Should have multiple different signal types
+        Assert.True(allTags.Contains("ai_semantic") || allTags.Contains("ai_pattern") || allTags.Contains("vietnamese"), 
+                   $"Should have AI detection signals in tags: {allTags}");
+    }
 }
