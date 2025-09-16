@@ -146,6 +146,13 @@ class Program
                 new TextLoader.Column(nameof(EnhancedUrlData.TextVietnamesePhishing), DataKind.Single, 27),
                 new TextLoader.Column(nameof(EnhancedUrlData.ContentSimilarity), DataKind.Single, 28),
                 new TextLoader.Column(nameof(EnhancedUrlData.MetaRefreshRedirect), DataKind.Single, 29),
+                
+                // Context intelligence features (5 new ones)
+                new TextLoader.Column("IsEducational", DataKind.Single, 30),
+                new TextLoader.Column("HasGamblingContext", DataKind.Single, 31),
+                new TextLoader.Column("PathContainsGambling", DataKind.Single, 32),
+                new TextLoader.Column("HostContainsBank", DataKind.Single, 33),
+                new TextLoader.Column("IsLegitimateReference", DataKind.Single, 34),
             }
         });
 

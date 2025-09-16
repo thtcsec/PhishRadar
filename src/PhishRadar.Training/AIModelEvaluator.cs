@@ -71,6 +71,66 @@ public class AIModelEvaluator
         }
     }
 
+    private static async Task BenchmarkSophisticatedPerformance((string url, bool isPhishing)[] testUrls)
+    {
+        Console.WriteLine("⚡ Sophisticated Performance Benchmark");
+        Console.WriteLine("".PadRight(40, '-'));
+
+        var sw = Stopwatch.StartNew();
+        var iterations = 1000;
+
+        for (int i = 0; i < iterations; i++)
+        {
+            foreach (var (url, _) in testUrls)
+            {
+                var features = ExtractSophisticatedFeatures(url);
+                var score = CalculateEnterpriseScore(features);
+            }
+        }
+
+        sw.Stop();
+        var totalTests = iterations * testUrls.Length;
+        var avgTimeMs = sw.ElapsedMilliseconds / (double)totalTests;
+        var throughput = totalTests / sw.Elapsed.TotalSeconds;
+
+        Console.WriteLine($"🏃‍♂️ Total sophisticated tests: {totalTests:N0}");
+        Console.WriteLine($"⏱️ Average time: {avgTimeMs:F3} ms per prediction");
+        Console.WriteLine($"🚀 Throughput: {throughput:F0} predictions/second");
+        Console.WriteLine($"💾 Memory usage: {GC.GetTotalMemory(false) / 1024 / 1024:F1} MB");
+        Console.WriteLine($"🧠 Feature complexity: 30 sophisticated features");
+        Console.WriteLine();
+    }
+
+    public static async Task RunQuickTest()
+    {
+        Console.WriteLine("⚡ Quick Sophisticated AI Test");
+        Console.WriteLine("=============================");
+
+        var testCases = new[]
+        {
+            "https://vietcombank.com.vn",
+            "https://secure-banking.vietcombank.com.evil-host.tk",
+            "https://huflit.edu.vn",
+            "https://xn--vitcombank-m7a.com",
+            "http://nohu88.club/casino",
+            "https://dictionary.cambridge.org/vi/dictionary/english-vietnamese/bet"
+        };
+
+        foreach (var url in testCases)
+        {
+            var features = ExtractSophisticatedFeatures(url);
+            var score = CalculateEnterpriseScore(features);
+            var risk = (int)(score * 100);
+            var indicators = ExtractKeyIndicators(features);
+            
+            Console.WriteLine($"🔍 {url}");
+            Console.WriteLine($"   Risk: {risk}% (Sophisticated Analysis)");
+            Console.WriteLine($"   Threats: {(indicators.Any() ? string.Join(", ", indicators) : "None detected")}");
+            Console.WriteLine($"   Features: Domain={features[10]:F0}d, IP={features[18]:F2}, Bank={features[17]:F2}");
+            Console.WriteLine();
+        }
+    }
+
     private static float[] ExtractSophisticatedFeatures(string url)
     {
         try
@@ -189,7 +249,8 @@ public class AIModelEvaluator
 
     private static bool ContainsBankKeywords(string url) =>
         new[] { "vietcombank", "techcombank", "bidv", "acb", "vpbank", "bank", "banking" }
-        .Any(keyword => url.ToLowerInvariant().Contains(keyword));
+        .Any(keyword => url.ToLowerInvariant().Contains(keyword)) &&
+        !IsLegitimateEducationalSite(url);
 
     private static bool HasSuspiciousTld(string host) =>
         new[] { ".tk", ".ml", ".ga", ".cf", ".club", ".xyz", ".top", ".click" }
@@ -205,7 +266,20 @@ public class AIModelEvaluator
 
     private static bool HasVietnamesePhishingPatterns(string url) =>
         new[] { "nohu", "tai-xiu", "casino", "cuoc", "dang-nhap", "cap-nhat" }
-        .Any(pattern => url.ToLowerInvariant().Contains(pattern));
+        .Any(pattern => url.ToLowerInvariant().Contains(pattern)) &&
+        !IsLegitimateEducationalSite(url);
+
+    private static bool IsLegitimateEducationalSite(string url)
+    {
+        var legitimateDomains = new[]
+        {
+            "cambridge.org", "dictionary.com", "merriam-webster.com", "oxforddictionaries.com",
+            "wikipedia.org", "britannica.com", "edu", ".gov", ".org",
+            "coursera.org", "edx.org", "khan academy.org", "mit.edu", "harvard.edu"
+        };
+        
+        return legitimateDomains.Any(domain => url.ToLowerInvariant().Contains(domain));
+    }
 
     private static float SimulateDomainAge(string host)
     {
@@ -277,64 +351,5 @@ public class AIModelEvaluator
         if (url.Count(c => c == '.') > 4) complexity += 0.4f;
         if (url.Count(c => c == '-') > 3) complexity += 0.3f;
         return Math.Min(1.0f, complexity);
-    }
-
-    private static async Task BenchmarkSophisticatedPerformance((string url, bool isPhishing)[] testUrls)
-    {
-        Console.WriteLine("⚡ Sophisticated Performance Benchmark");
-        Console.WriteLine("".PadRight(40, '-'));
-
-        var sw = Stopwatch.StartNew();
-        var iterations = 1000;
-
-        for (int i = 0; i < iterations; i++)
-        {
-            foreach (var (url, _) in testUrls)
-            {
-                var features = ExtractSophisticatedFeatures(url);
-                var score = CalculateEnterpriseScore(features);
-            }
-        }
-
-        sw.Stop();
-        var totalTests = iterations * testUrls.Length;
-        var avgTimeMs = sw.ElapsedMilliseconds / (double)totalTests;
-        var throughput = totalTests / sw.Elapsed.TotalSeconds;
-
-        Console.WriteLine($"🏃‍♂️ Total sophisticated tests: {totalTests:N0}");
-        Console.WriteLine($"⏱️ Average time: {avgTimeMs:F3} ms per prediction");
-        Console.WriteLine($"🚀 Throughput: {throughput:F0} predictions/second");
-        Console.WriteLine($"💾 Memory usage: {GC.GetTotalMemory(false) / 1024 / 1024:F1} MB");
-        Console.WriteLine($"🧠 Feature complexity: 30 sophisticated features");
-        Console.WriteLine();
-    }
-
-    public static async Task RunQuickTest()
-    {
-        Console.WriteLine("⚡ Quick Sophisticated AI Test");
-        Console.WriteLine("=============================");
-
-        var testCases = new[]
-        {
-            "https://vietcombank.com.vn",
-            "https://secure-banking.vietcombank.com.evil-host.tk",
-            "https://huflit.edu.vn",
-            "https://xn--vitcombank-m7a.com",
-            "http://nohu88.club/casino"
-        };
-
-        foreach (var url in testCases)
-        {
-            var features = ExtractSophisticatedFeatures(url);
-            var score = CalculateEnterpriseScore(features);
-            var risk = (int)(score * 100);
-            var indicators = ExtractKeyIndicators(features);
-            
-            Console.WriteLine($"🔍 {url}");
-            Console.WriteLine($"   Risk: {risk}% (Sophisticated Analysis)");
-            Console.WriteLine($"   Threats: {(indicators.Any() ? string.Join(", ", indicators) : "None detected")}");
-            Console.WriteLine($"   Features: Domain={features[10]:F0}d, IP={features[18]:F2}, Bank={features[17]:F2}");
-            Console.WriteLine();
-        }
     }
 }

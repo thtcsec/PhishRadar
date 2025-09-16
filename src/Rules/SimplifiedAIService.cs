@@ -125,6 +125,19 @@ public sealed class SimplifiedAIService : IMlScorer, IDisposable
 
         double score = 0;
 
+        // === CONTEXT-AWARE ANALYSIS ===
+        
+        // Educational domain protection (strongest override)
+        bool isEducational = vector.Length > 30 && vector[30] > 0; // IsEducational feature
+        bool isLegitimateReference = vector.Length > 34 && vector[34] > 0; // IsLegitimateReference feature
+        
+        if (isEducational || isLegitimateReference)
+        {
+            // For educational/reference sites, massively reduce risk
+            score *= 0.1; // 90% reduction
+            return Math.Max(0, Math.Min(0.3, score)); // Cap at 30% max
+        }
+
         // === CRITICAL THREAT INDICATORS (High Weight) ===
         
         // 1. Protocol Security (35% weight)
@@ -143,11 +156,13 @@ public sealed class SimplifiedAIService : IMlScorer, IDisposable
         if (vector.Length > 12 && vector[12] > 0) // HasSuspiciousTld
             score += 0.32;
 
-        // 3. Bank Impersonation (Critical for Vietnamese market)
+        // 3. Bank Impersonation (Critical for Vietnamese market) - CONTEXT-AWARE
         if (vector.Length > 18 && vector[18] > 0.8) // SimilarityToKnownBank
-            score += 0.50;
-        else if (vector.Length > 18 && vector[18] > 0.6)
-            score += 0.35;
+        {
+            bool hostContainsBank = vector.Length > 33 && vector[33] > 0;
+            if (hostContainsBank && !isEducational)
+                score += 0.50; // Only flag if actually contains bank name AND not educational
+        }
 
         // 4. IP & ASN Reputation
         if (vector.Length > 19 && vector[19] < 0.3) // Poor IP reputation
@@ -163,17 +178,36 @@ public sealed class SimplifiedAIService : IMlScorer, IDisposable
         else if (vector.Length > 16 && vector[16] > 2)
             score += 0.25;
 
-        // 6. Vietnamese Phishing Patterns
+        // 6. Vietnamese Phishing Patterns - CONTEXT-AWARE
         if (vector.Length > 27 && vector[27] > 0) // Vietnamese phishing text
-            score += 0.45;
+        {
+            if (!isEducational && !isLegitimateReference)
+                score += 0.45;
+        }
+
+        // 7. Gambling Detection - CONTEXT-AWARE
+        bool hasGamblingContext = vector.Length > 31 && vector[31] > 0;
+        bool pathContainsGambling = vector.Length > 32 && vector[32] > 0;
+        
+        if (hasGamblingContext || pathContainsGambling)
+        {
+            if (!isEducational && !isLegitimateReference)
+                score += 0.50; // High penalty for actual gambling
+        }
 
         if (vector.Length > 5 && vector[5] > 0) // OTP keywords
-            score += 0.38;
+        {
+            if (!isEducational)
+                score += 0.38;
+        }
 
         if (vector.Length > 6 && vector[6] > 0) // Banking keywords
-            score += 0.40;
+        {
+            if (!isEducational && !isLegitimateReference)
+                score += 0.40;
+        }
 
-        // 7. Advanced Obfuscation
+        // 8. Advanced Obfuscation
         if (vector.Length > 24 && vector[24] > 0) // JS obfuscation
             score += 0.33;
 
@@ -182,18 +216,21 @@ public sealed class SimplifiedAIService : IMlScorer, IDisposable
 
         // === BEHAVIORAL INDICATORS (Medium Weight) ===
 
-        // 8. Urgency Tactics
+        // 9. Urgency Tactics
         if (vector.Length > 17 && vector[17] > 0) // Urgency language
-            score += 0.28;
+        {
+            if (!isEducational)
+                score += 0.28;
+        }
 
-        // 9. Visual Deception
+        // 10. Visual Deception
         if (vector.Length > 26 && vector[26] > 0.7) // Favicon similarity
             score += 0.32;
 
         if (vector.Length > 28 && vector[28] > 0.7) // Content similarity
             score += 0.35;
 
-        // 10. Technical Redirects
+        // 11. Technical Redirects
         if (vector.Length > 23 && vector[23] > 2) // Multiple redirects
             score += 0.25;
 
@@ -202,7 +239,7 @@ public sealed class SimplifiedAIService : IMlScorer, IDisposable
 
         // === STRUCTURAL COMPLEXITY (Lower Weight) ===
 
-        // 11. URL Structure Analysis
+        // 12. URL Structure Analysis
         if (vector.Length > 1 && vector[1] > 150) // Long URL
             score += 0.20;
 
@@ -217,19 +254,16 @@ public sealed class SimplifiedAIService : IMlScorer, IDisposable
         if (vector.Length > 3 && vector[3] > 10) // Many digits
             score += 0.15;
 
-        // === HOSTING GEOGRAPHY ANALYSIS ===
-        // Note: HostingCountry would be processed separately in real implementation
-
         // === TEMPORAL FACTORS ===
         if (vector.Length > 22 && vector[22] < 30) // Young SSL cert
             score += 0.15;
 
         // === CONTEXT ADJUSTMENTS ===
 
-        // Vietnamese context boost
+        // Vietnamese context boost (only for non-educational)
         bool hasVietnameseContext = (vector.Length > 27 && vector[27] > 0) || 
                                    (vector.Length > 6 && vector[6] > 0);
-        if (hasVietnameseContext)
+        if (hasVietnameseContext && !isEducational)
             score *= 1.1; // 10% boost for Vietnamese threats
 
         // Multiple threat indicators = higher confidence
@@ -237,14 +271,11 @@ public sealed class SimplifiedAIService : IMlScorer, IDisposable
         if (vector.Length > 4 && vector[4] > 0) threatCount++; // HTTP
         if (vector.Length > 13 && vector[13] > 0) threatCount++; // Punycode
         if (vector.Length > 18 && vector[18] > 0.5) threatCount++; // Bank similarity
-        if (vector.Length > 27 && vector[27] > 0) threatCount++; // VN phishing
+        if (vector.Length > 27 && vector[27] > 0 && !isEducational) threatCount++; // VN phishing
         if (vector.Length > 24 && vector[24] > 0) threatCount++; // JS obfuscation
 
-        if (threatCount > 2)
+        if (threatCount > 2 && !isEducational)
             score *= 1.15; // 15% boost for multiple indicators
-
-        // Educational domain protection
-        // (This would be determined by HostingCountry/domain analysis in real implementation)
 
         return Math.Min(1.0, score);
     }
