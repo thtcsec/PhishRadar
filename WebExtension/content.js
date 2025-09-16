@@ -1,15 +1,20 @@
-// PhishRadar Content Script - Production Ready
+// PhishRadar Content Script
 // Vietnamese Anti-Phishing Extension
 
 // ====== CONFIGURATION ======
 const CONFIG = {
-    API_BASE: "http://localhost:5122", // Match với port API mới
+    API_BASE: "http://localhost:5122",
   RISK_THRESHOLD: 60,
+  HARD_BLOCK_THRESHOLD: 80,
   API_TIMEOUT_MS: 5000,
   CONCURRENCY: 3,
   LINK_SCAN_LIMIT: 50,
   BANNER_TIMEOUT: 10000
 };
+
+// Escape HTML to prevent XSS
+const esc = s => String(s).replace(/[&<>"'`]/g, c =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;','`':'&#96;'}[c]));
 
 // ====== GLOBAL STATE ======
 let inflight = 0;
@@ -50,8 +55,9 @@ function looksSuspiciousHost(hostname) {
   const vnBanks = ["vietcombank", "techcombank", "bidv", "acb", "vpbank", "agribank", "momo"];
   const safeTlds = [".com.vn", ".vn", ".edu.vn", ".gov.vn"];
   
-  // Bank name + unsafe TLD
-  if (vnBanks.some(bank => host.includes(bank)) && !safeTlds.some(tld => host.endsWith(tld))) {
+  // Bank name in suspicious context
+  const labels = host.split('.');
+  if (vnBanks.some(bank => labels.some(label => label.includes(bank) && label !== bank)) && !safeTlds.some(tld => host.endsWith(tld))) {
     return true;
   }
   
@@ -150,15 +156,17 @@ function injectBanner(data) {
   bannerInjected = true;
   
   // Auto-hide after timeout
-  setTimeout(() => {
-    if (banner.parentNode) {
-      banner.style.animation = "phishradar-slide-down 0.3s ease-out reverse";
-      setTimeout(() => {
-        banner.remove();
-        bannerInjected = false;
-      }, 300);
-    }
-  }, CONFIG.BANNER_TIMEOUT);
+  if (data.risk < 80) {
+    setTimeout(() => {
+      if (banner.parentNode) {
+        banner.style.animation = "phishradar-slide-down 0.3s ease-out reverse";
+        setTimeout(() => {
+          banner.remove();
+          bannerInjected = false;
+        }, 300);
+      }
+    }, CONFIG.BANNER_TIMEOUT);
+  }
 }
 
 // Update banner content
@@ -179,8 +187,8 @@ function updateBannerContent(banner, data) {
     <div style="margin-right: 30px;">
       ${emoji} <strong>PhishRadar</strong>: ${riskLevel} (${risk}%)
       <br>
-      <small>🎯 ${threatType}</small>
-      ${reasons.length > 0 ? `<br><small>📋 ${reasons[0]}</small>` : ""}
+      <small>🎯 ${esc(threatType)}</small>
+      ${reasons.length > 0 ? `<br><small>📋 ${esc(reasons[0])}</small>` : ""}
     </div>
   `;
 }
@@ -272,9 +280,40 @@ async function scoreLinks() {
     if (unique.length >= CONFIG.LINK_SCAN_LIMIT) break;
   }
 
-  // Run with concurrency limit
-  const tasks = unique.map(([abs, a]) => queueTask(() => scoreOneLink(abs, a)));
-  await Promise.allSettled(tasks);
+  if (unique.length === 0) return;
+
+  // Use bulk scan
+  const urls = unique.map(([abs]) => abs);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), CONFIG.API_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${CONFIG.API_BASE}/bulk-scan`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ Urls: urls }),
+      signal: ctrl.signal
+    });
+    clearTimeout(timer);
+
+    if (!response.ok) return;
+
+    const { results } = await response.json();
+
+    // Map results back to anchors
+    for (let i = 0; i < results.length; i++) {
+      const data = results[i];
+      const [abs, a] = unique[i];
+      linkScoreCache.set(abs, data);
+
+      if ((data?.risk ?? 0) >= CONFIG.RISK_THRESHOLD) {
+        decorateLink(a, data);
+      }
+    }
+  } catch (error) {
+    clearTimeout(timer);
+    // Silent fail
+  }
 }
 
 // ====== FORM PROTECTION ======
@@ -282,7 +321,7 @@ async function scoreLinks() {
 function hookForms() {
   // Hook all form submissions
   document.addEventListener("submit", async (e) => {
-    if (!lastScore || lastScore.risk < 70) return;
+    if (!lastScore || lastScore.risk < CONFIG.HARD_BLOCK_THRESHOLD) return;
     
     const form = e.target;
     const hasPasswordField = form.querySelector('input[type="password"]');
@@ -310,7 +349,7 @@ Nhấn "Cancel" để bảo vệ tài khoản của bạn.
     }
   }, true);
   
-  if (!lastScore || lastScore.risk < 60) return;
+  if (!lastScore || lastScore.risk < CONFIG.RISK_THRESHOLD) return;
 
   // Highlight sensitive input fields (RED)
   const sensitiveInputs = document.querySelectorAll(`
@@ -364,7 +403,7 @@ function hookLinkHovers() {
 
     // Set a new timer to scan after 300ms
     hoverTimeout = setTimeout(() => {
-      console.log(`Prefetching link: ${absUrl}`);
+      if (linkScoreCache.has(absUrl)) return;
       queueTask(() => scoreOneLink(absUrl, a));
     }, 300);
   });
@@ -386,6 +425,13 @@ function hookLinkHovers() {
 
   console.log("🛡️ PhishRadar Content Script loaded");
 
+  // Ping API health
+  try {
+    await fetch(`${CONFIG.API_BASE}/health`, { method: "GET" });
+  } catch {
+    return; // Server not available
+  }
+
   // 1. INSTANT WARNING - Client-side precheck
   if (looksSuspiciousHost(location.hostname)) {
     injectBanner({
@@ -403,11 +449,15 @@ function hookLinkHovers() {
   };
 
   try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), CONFIG.API_TIMEOUT_MS);
     const response = await fetch(`${CONFIG.API_BASE}/score`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify(requestBody),
+      signal: ctrl.signal
     });
+    clearTimeout(t);
 
     if (response.ok) {
       const data = await response.json();
