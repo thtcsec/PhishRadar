@@ -15,10 +15,12 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddCors(o => o.AddDefaultPolicy(p =>
     p.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod()));
 
-// ---------- DI (LOCKED CONFIG - Enhanced Components Only) ----------
+// ---------- DI (PRODUCTION AI CONFIG) ----------
 builder.Services.AddSingleton<IFeatureExtractor, AdvancedFeatureExtractor>();
 builder.Services.AddSingleton<IFeaturizer, EnhancedFeaturizer>();
-builder.Services.AddSingleton<IMlScorer, EnhancedMlScorer>();
+
+// PRODUCTION AI SERVICE - Simplified for reliability
+builder.Services.AddSingleton<IMlScorer, SimplifiedAIService>();
 
 builder.Services.AddSingleton<IRuleEngine, RuleEngine>();
 
@@ -48,10 +50,13 @@ builder.Services.AddScoped<IRedirectTracer, RedirectTracer>();
 builder.Services.AddHttpClient<IWhoisLookup, WhoisHttpService>();
 builder.Services.AddSingleton<ILogoDetectorService, LogoDetectorService>();
 
+// Background service to clean AI cache
+builder.Services.AddHostedService<AICacheCleanupService>();
+
 var app = builder.Build();
 app.UseCors();
 
-app.MapGet("/", () => "PhishRadar API - Production Ready");
+app.MapGet("/", () => "PhishRadar API - Production Ready with Advanced AI");
 
 // ---------- LOCKED CONFIGURATION ----------
 // Comprehensive Vietnamese whitelist
@@ -215,7 +220,7 @@ async Task<EnhancedScanResponse> AnalyzeCoreAsync(
         foreach (var tag in ruleResult.Tags) tags.Add(tag);
     }
 
-    // ENHANCED ML SCORING với ONNX thật + explainability
+    // ===== SIMPLIFIED AI SCORING =====
     double mlScore = 0;
     Dictionary<string, double> featureContributions = new();
     
@@ -223,7 +228,19 @@ async Task<EnhancedScanResponse> AnalyzeCoreAsync(
 
     if (hasSignals && finalFeatures is not null)
     {
-        if (ml is EnhancedMlScorer enhancedMl)
+        if (ml is SimplifiedAIService simplifiedAI)
+        {
+            var (score, contributions) = await simplifiedAI.ScoreAdvancedWithExplainabilityAsync(finalFeatures);
+            mlScore = score;
+            featureContributions = contributions;
+        }
+        else if (ml is ProductionAIService productionAI)
+        {
+            var (score, contributions) = await productionAI.ScoreAdvancedWithExplainabilityAsync(finalFeatures);
+            mlScore = score;
+            featureContributions = contributions;
+        }
+        else if (ml is EnhancedMlScorer enhancedMl)
         {
             var (score, contributions) = await enhancedMl.ScoreAdvancedWithExplainabilityAsync(finalFeatures);
             mlScore = score;
@@ -236,8 +253,7 @@ async Task<EnhancedScanResponse> AnalyzeCoreAsync(
         }
     }
 
-    // ===== BỘ NÃO HỢP THÀNH - RULES + ML INTELLIGENCE =====
-    // Công thức: final = clamp(max(ruleScore, 0.6*ruleScore + 0.4*mlProb))
+    // ===== BỘ NÃO HỢP THÀNH - RULES + AI ENSEMBLE =====
     var ruleScore = new RuleScore(maxRuleScore, reasons.ToList(), tags.ToList());
     
     if (rules is RuleEngine enhancedRuleEngine)
@@ -275,8 +291,8 @@ async Task<EnhancedScanResponse> AnalyzeCoreAsync(
     // Ensure we have evidence when flagging risk
     if (risk > 0 && reasons.Count == 0) 
     {
-        reasons.Add("Security risk indicators detected");
-        tags.Add("generic_risk");
+        reasons.Add("AI detected security risk indicators");
+        tags.Add("ai_detected_risk");
     }
 
     // Generate intelligent response with AI explainability
@@ -313,7 +329,7 @@ async Task<EnhancedScanResponse> AnalyzeCoreAsync(
             RuleContributions = ruleContributions,
             AIInsights = aiInsights,
             DecisionReasoning = GenerateDecisionReasoning(maxRuleScore, mlScore, combinedScore),
-            Algorithm = "Enhanced Rules Engine + ML Hybrid Intelligence"
+            Algorithm = "Simplified AI + Rules Hybrid Intelligence"
         },
         Recommendations = recommendations,
         Metrics = new ScanMetrics
@@ -541,20 +557,49 @@ app.MapPost("/score-qr", async ([FromBody] ScanRequest? req,
     }
 });
 
-// HEALTH & MONITORING
-app.MapGet("/health", () => Results.Ok(new
+// HEALTH & MONITORING with AI Status
+app.MapGet("/health", (IMlScorer aiService) => 
 {
-    status = "healthy",
-    timestamp = DateTime.UtcNow,
-    version = "3.0.0-production",
-    features = new 
+    var aiStatus = "unknown";
+    var modelCount = 0;
+    
+    if (aiService is SimplifiedAIService)
     {
-        whoisCache = WhoisCache.Count,
-        advancedFeatures = "enabled",
-        enhancedMl = "enabled",
-        vietnameseIntelligence = "enabled"
+        aiStatus = "simplified_intelligent";
+        modelCount = 1;
     }
-}));
+    else if (aiService is ProductionAIService)
+    {
+        aiStatus = "production_ensemble";
+        modelCount = 4;
+    }
+    else if (aiService is EnhancedMlScorer)
+    {
+        aiStatus = "enhanced_fallback";
+        modelCount = 1;
+    }
+    
+    return Results.Ok(new
+    {
+        status = "healthy",
+        timestamp = DateTime.UtcNow,
+        version = "4.0.0-simplified-ai",
+        ai = new 
+        {
+            status = aiStatus,
+            models = modelCount,
+            cacheEntries = WhoisCache.Count
+        },
+        features = new 
+        {
+            whoisCache = WhoisCache.Count,
+            advancedFeatures = "enabled",
+            simplifiedAI = "enabled",
+            vietnameseIntelligence = "enabled",
+            heuristicScoring = "enabled"
+        }
+    });
+});
 
 // BULK SCAN for testing/benchmarking
 app.MapPost("/bulk-scan", async ([FromBody] BulkScanRequest? req,
@@ -590,4 +635,42 @@ app.Run();
 public class BulkScanRequest
 {
     public string[] Urls { get; set; } = Array.Empty<string>();
+}
+
+// Background service to clean AI cache
+public class AICacheCleanupService : BackgroundService
+{
+    private readonly IServiceProvider _services;
+    
+    public AICacheCleanupService(IServiceProvider services)
+    {
+        _services = services;
+    }
+    
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                using var scope = _services.CreateScope();
+                var aiService = scope.ServiceProvider.GetService<IMlScorer>();
+                
+                if (aiService is SimplifiedAIService simplifiedAI)
+                {
+                    simplifiedAI.CleanCache();
+                }
+                else if (aiService is ProductionAIService productionAI)
+                {
+                    productionAI.CleanCache();
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Cache cleanup error: {ex.Message}");
+            }
+            
+            await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken);
+        }
+    }
 }

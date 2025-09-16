@@ -1,6 +1,7 @@
 ﻿using Microsoft.ML;
 using Microsoft.ML.Data;
 using Microsoft.ML.OnnxRuntime; // quan trọng
+using PhishRadar.Training;
 
 class UrlData
 {
@@ -16,8 +17,46 @@ class UrlData
 
 class Program
 {
-    static void Main()
+    static async Task Main(string[] args)
     {
+        Console.WriteLine("🤖 PhishRadar AI Training System");
+        Console.WriteLine("================================");
+
+        if (args.Length > 0 && args[0] == "--eval")
+        {
+            await AIModelEvaluator.RunEvaluationAsync();
+            return;
+        }
+
+        if (args.Length > 0 && args[0] == "--test")
+        {
+            await AIModelEvaluator.RunQuickTest();
+            return;
+        }
+
+        // Advanced AI Training
+        var trainer = new AdvancedModelTrainer(seed: 42);
+        await trainer.TrainAllModelsAsync();
+
+        // Legacy simple training for compatibility
+        await TrainSimpleModel();
+
+        Console.WriteLine("🎉 All AI models trained successfully!");
+        Console.WriteLine("Available models:");
+        Console.WriteLine("  - phishradar.onnx (Default ensemble model)");
+        Console.WriteLine("  - phishradar_lightgbm.onnx (LightGBM)");
+        Console.WriteLine("  - phishradar_fasttree.onnx (FastTree)");
+        Console.WriteLine("  - phishradar_logistic.onnx (Logistic Regression)");
+        Console.WriteLine("  - phishradar_neural.onnx (Neural Network)");
+        Console.WriteLine();
+        Console.WriteLine("🔬 To evaluate models: dotnet run -- --eval");
+        Console.WriteLine("⚡ For quick test: dotnet run -- --test");
+    }
+
+    static async Task TrainSimpleModel()
+    {
+        Console.WriteLine("\n📚 Training Simple Model (Legacy compatibility)...");
+        
         var ml = new MLContext(seed: 42);
 
         // CSV sẽ được copy sang output, nên đọc từ AppContext.BaseDirectory
@@ -65,13 +104,10 @@ class Program
 
         Console.WriteLine($"[METRICS] AUC={metrics.AreaUnderRocCurve:F3} F1={metrics.F1Score:F3} Acc={metrics.Accuracy:F3}");
 
-        // Xuất ONNX vào đúng thư mục build
-        var onnxPath = Path.Combine(AppContext.BaseDirectory, "phishradar.onnx");
-        Console.WriteLine($"[INFO] Writing ONNX: {onnxPath}");
-        using (var fs = File.Create(onnxPath))
-        {
-            ml.Model.ConvertToOnnx(model, split.TrainSet, fs); // ML.NET 3.x -> void
-        }
-        Console.WriteLine("[OK] Saved ONNX.");
+        // Save as ML.NET model for now (ONNX conversion issues in 3.x)
+        var modelPath = Path.Combine(AppContext.BaseDirectory, "phishradar_simple.zip");
+        Console.WriteLine($"[INFO] Writing ML.NET model: {modelPath}");
+        ml.Model.Save(model, split.TrainSet.Schema, modelPath);
+        Console.WriteLine("[OK] Saved ML.NET model.");
     }
 }

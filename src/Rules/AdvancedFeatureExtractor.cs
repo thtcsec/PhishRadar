@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using System.Linq;
 using System.Text.RegularExpressions;
-using System.Text;
 using PhishRadar.Core.Abstractions;
 using PhishRadar.Core.Models;
 using AngleSharp;
@@ -11,317 +11,378 @@ using AngleSharp.Dom;
 namespace PhishRadar.Rules;
 
 /// <summary>
-/// Enterprise-grade feature extraction with 50+ advanced features
-/// Based on academic research and threat intelligence
+/// Advanced Feature Extractor with Enhanced Intelligence
+/// Extracts 25+ features for AI/ML model training
 /// </summary>
 public sealed class AdvancedFeatureExtractor : IFeatureExtractor
 {
-    private static readonly string[] SuspiciousTlds = { 
-        ".tk", ".ml", ".ga", ".cf", ".club", ".xyz", ".top", ".click", 
-        ".download", ".stream", ".science", ".racing", ".win", ".bid" 
-    };
-
-    // Add legitimate Vietnamese domains
-    private static readonly string[] LegitimateVietnameseTlds = {
-        ".edu.vn", ".gov.vn", ".ac.vn", ".org.vn", ".com.vn", ".vn"
-    };
-
+    // Vietnamese context patterns
     private static readonly string[] VietnameseBanks = {
-        "vietcombank", "vietinbank", "bidv", "techcombank", "acb", "vpbank", 
-        "agribank", "vib", "mbbank", "tpbank", "sacombank", "maritimebank",
-        "eximbank", "shb", "seabank", "bacabank", "namabank", "oceanbank"
+        "vietcombank", "techcombank", "bidv", "acb", "vpbank", "agribank",
+        "vietinbank", "mbbank", "tpbank", "sacombank", "maritimebank"
     };
 
-    private static readonly string[] PhishingKeywords = {
-        "verify", "suspend", "urgent", "security", "update", "confirm", "alert",
-        "xác thực", "khóa", "bảo mật", "cập nhật", "khẩn cấp", "otp", "mở khóa",
-        "tạm khóa", "verify account", "suspended", "blocked", "expired"
+    private static readonly string[] VietnamesePhishingKeywords = {
+        "tài khoản", "đăng nhập", "xác thực", "ngân hàng", "chuyển khoản",
+        "otp", "mã pin", "thẻ atm", "internet banking", "mobile banking"
     };
 
-    // Add gambling detection
-    private static readonly string[] GamblingKeywords = {
-        "casino", "bet", "betting", "poker", "slot", "lottery", "gambling", "jackpot",
-        "cado", "ca-do", "bongda", "keo", "odds", "188bet", "fun88", "w88"
+    private static readonly string[] VietnameseGamblingKeywords = {
+        "cờ bạc", "đánh bạc", "casino", "nổ hũ", "tài xỉu", "cược",
+        "xổ số", "lô đề", "game bài", "poker", "baccarat"
     };
 
-    private static readonly Regex EmailPattern = new(@"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", RegexOptions.Compiled);
-    private static readonly Regex PhonePattern = new(@"\b(\+84|0)[3-9]\d{8}\b", RegexOptions.Compiled);
-    private static readonly Regex CreditCardPattern = new(@"\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b", RegexOptions.Compiled);
+    private static readonly string[] VietnameseUrgencyKeywords = {
+        "khẩn cấp", "ngay lập tức", "hết hạn", "nhanh chóng", "gấp",
+        "urgent", "immediately", "expires", "deadline", "asap"
+    };
+
+    private static readonly string[] SuspiciousTlds = {
+        ".tk", ".ml", ".ga", ".cf", ".club", ".xyz", ".top", ".click",
+        ".download", ".stream", ".science", ".racing", ".win", ".bid"
+    };
+
+    private static readonly Regex VietnamesePhonePattern = new(@"\b(0[3-9]\d{8}|84[3-9]\d{8})\b", RegexOptions.Compiled);
+    private static readonly Regex SensitiveFieldPattern = new(@"(password|pin|otp|cvv|ssn|mật khẩu|mã pin)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
 
     public AdvancedFeatures ExtractAdvanced(ScanRequest request)
     {
         if (string.IsNullOrWhiteSpace(request.Url))
             return new AdvancedFeatures();
 
-        try 
+        try
         {
             var uri = new Uri(request.Url);
-            
-            // Basic URL components - FIX protocol detection
-            var features = new AdvancedFeatures
-            {
-                Host = uri.IdnHost.ToLowerInvariant(),
-                Path = uri.AbsolutePath.ToLowerInvariant(),
-                QueryString = uri.Query,
-                Fragment = uri.Fragment,
-                Protocol = uri.Scheme.ToLowerInvariant(), // Ensure lowercase
-                Port = uri.Port
-            };
+            var host = uri.Host.ToLowerInvariant();
+            var path = uri.AbsolutePath.ToLowerInvariant();
+            var protocol = uri.Scheme.ToLowerInvariant();
+            var html = request.Html ?? "";
+            var text = request.Text ?? "";
+            var combinedText = $"{request.Url} {html} {text}".ToLowerInvariant();
 
-            // Lexical analysis
-            features = ExtractLexicalFeatures(features, uri);
-            
-            // Domain analysis - ENHANCED
-            features = ExtractDomainFeatures(features, uri);
+            // Basic URL analysis
+            var basicFeatures = AnalyzeUrlStructure(request.Url, host, path, protocol);
             
             // Content analysis
-            if (!string.IsNullOrWhiteSpace(request.Html))
-            {
-                features = ExtractContentFeatures(features, request.Html);
-            }
-            else if (!string.IsNullOrWhiteSpace(request.Text))
-            {
-                features = features with { ContentText = request.Text };
-            }
+            var contentFeatures = AnalyzeContent(html, text);
             
-            // Vietnamese-specific analysis - ENHANCED
-            features = ExtractVietnameseFeatures(features, request);
+            // Vietnamese context analysis
+            var vietnameseFeatures = AnalyzeVietnameseContext(combinedText, host);
             
-            // Generate ML vector
-            features = features with {
-                NumericalFeatures = GenerateMLVector(features)
+            // Security analysis
+            var securityFeatures = AnalyzeSecurity(protocol, host, html);
+
+            return new AdvancedFeatures
+            {
+                // Basic URL features
+                Host = host,
+                Path = path,
+                Protocol = protocol,
+                ContentText = text.Length > 1000 ? text.Substring(0, 1000) : text,
+
+                // URL structure
+                UrlLength = basicFeatures.UrlLength,
+                HostLength = basicFeatures.HostLength,
+                PathLength = basicFeatures.PathLength,
+                SubdomainCount = basicFeatures.SubdomainCount,
+                PathDepth = basicFeatures.PathDepth,
+                QueryParameterCount = basicFeatures.QueryParameterCount,
+                FragmentLength = basicFeatures.FragmentLength,
+
+                // Character analysis
+                HyphenCount = basicFeatures.HyphenCount,
+                DigitCount = basicFeatures.DigitCount,
+                SpecialCharCount = basicFeatures.SpecialCharCount,
+                UrlEntropy = basicFeatures.UrlEntropy,
+
+                // Content features
+                FormCount = contentFeatures.FormCount,
+                InputFieldCount = contentFeatures.InputFieldCount,
+                LinkCount = contentFeatures.LinkCount,
+                ScriptCount = contentFeatures.ScriptCount,
+                IframeCount = contentFeatures.IframeCount,
+                HiddenFieldCount = contentFeatures.HiddenFieldCount,
+                
+                // Security indicators
+                IsSuspiciousTld = securityFeatures.IsSuspiciousTld,
+                HasPunycode = securityFeatures.HasPunycode,
+                HasSensitiveFields = securityFeatures.HasSensitiveFields,
+                HasRedirects = securityFeatures.HasRedirects,
+
+                // Vietnamese context
+                IsVietnameseBankDomain = vietnameseFeatures.IsVietnameseBankDomain,
+                HasVietnamesePhishingKeywords = vietnameseFeatures.HasVietnamesePhishingKeywords,
+                HasVietnameseGamblingKeywords = vietnameseFeatures.HasVietnameseGamblingKeywords,
+                HasVietnameseUrgencyKeywords = vietnameseFeatures.HasVietnameseUrgencyKeywords,
+                VietnameseThreats = vietnameseFeatures.VietnameseThreats,
+
+                // Generate numerical features for ML
+                NumericalFeatures = GenerateNumericalFeatures(basicFeatures, contentFeatures, vietnameseFeatures, securityFeatures)
             };
-
-            return features;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            return new AdvancedFeatures();
+            Console.WriteLine($"[WARN] Feature extraction failed for {request.Url}: {ex.Message}");
+            return new AdvancedFeatures
+            {
+                Host = request.Url ?? "",
+                Protocol = "unknown",
+                NumericalFeatures = new float[24] // Default empty features
+            };
         }
     }
 
-    // Legacy interface compliance
-    public (string Host, string Path, string? Text) Extract(ScanRequest req)
+    private UrlStructureFeatures AnalyzeUrlStructure(string url, string host, string path, string protocol)
     {
-        var advanced = ExtractAdvanced(req);
-        return (advanced.Host, advanced.Path, advanced.ContentText);
-    }
-
-    private AdvancedFeatures ExtractLexicalFeatures(AdvancedFeatures features, Uri uri)
-    {
-        var host = features.Host;
-        var fullUrl = uri.ToString();
-
-        return features with {
-            UrlLength = fullUrl.Length,
+        var uri = new Uri(url);
+        
+        return new UrlStructureFeatures
+        {
+            UrlLength = url.Length,
             HostLength = host.Length,
-            PathLength = features.Path.Length,
-            SubdomainCount = Math.Max(0, host.Split('.').Length - 2),
+            PathLength = path.Length,
+            SubdomainCount = host.Count(c => c == '.'),
+            PathDepth = path.Count(c => c == '/'),
+            QueryParameterCount = uri.Query.Count(c => c == '&') + (string.IsNullOrEmpty(uri.Query) ? 0 : 1),
+            FragmentLength = uri.Fragment.Length,
             HyphenCount = host.Count(c => c == '-'),
             DigitCount = host.Count(char.IsDigit),
-            SpecialCharCount = host.Count(c => !char.IsLetterOrDigit(c) && c != '.' && c != '-'),
-            EntropyScore = CalculateEntropy(host),
-            HasPunycode = host.Contains("xn--")
+            SpecialCharCount = url.Count(c => !char.IsLetterOrDigit(c) && c != '.' && c != '/' && c != ':'),
+            UrlEntropy = CalculateEntropy(url)
         };
     }
 
-    private AdvancedFeatures ExtractDomainFeatures(AdvancedFeatures features, Uri uri)
+    private ContentFeatures AnalyzeContent(string html, string text)
     {
-        var tld = GetTopLevelDomain(features.Host);
-        var fullTld = GetFullTLD(features.Host); // Get full TLD like .edu.vn
-        
-        return features with {
-            TopLevelDomain = tld,
-            IsSuspiciousTld = SuspiciousTlds.Contains(tld) && !LegitimateVietnameseTlds.Contains(fullTld),
-            IsVietnameseBankDomain = VietnameseBanks.Any(bank => features.Host.Contains(bank))
-        };
-    }
-
-    private AdvancedFeatures ExtractContentFeatures(AdvancedFeatures features, string html)
-    {
-        try 
+        if (string.IsNullOrWhiteSpace(html))
         {
-            var config = Configuration.Default;
+            return new ContentFeatures
+            {
+                FormCount = 0,
+                InputFieldCount = 0,
+                LinkCount = 0,
+                ScriptCount = 0,
+                IframeCount = 0,
+                HiddenFieldCount = 0
+            };
+        }
+
+        try
+        {
+            // Use AngleSharp configuration without ambiguity
+            var config = AngleSharp.Configuration.Default;
             var context = BrowsingContext.New(config);
             var document = context.OpenAsync(req => req.Content(html)).Result;
 
             var forms = document.QuerySelectorAll("form");
             var inputs = document.QuerySelectorAll("input");
-            var externalLinks = document.QuerySelectorAll("a[href]")
-                .Where(a => IsExternalLink(a.GetAttribute("href"), features.Host)).Count();
+            var links = document.QuerySelectorAll("a");
+            var scripts = document.QuerySelectorAll("script");
+            var iframes = document.QuerySelectorAll("iframe");
+            var hiddenInputs = document.QuerySelectorAll("input[type='hidden']");
 
-            var text = document.Body?.TextContent ?? "";
-            var suspiciousKeywords = PhishingKeywords.Where(kw => 
-                text.Contains(kw, StringComparison.OrdinalIgnoreCase)).ToArray();
-
-            return features with {
-                ContentText = text,
-                HtmlContent = html,
+            return new ContentFeatures
+            {
                 FormCount = forms.Length,
                 InputFieldCount = inputs.Length,
-                ExternalLinkCount = externalLinks,
-                ImageCount = document.QuerySelectorAll("img").Length,
-                ScriptCount = document.QuerySelectorAll("script").Length,
-                SuspiciousKeywords = suspiciousKeywords,
-                HasSensitiveFields = HasSensitiveInputFields(inputs),
-                HasUrgencyLanguage = HasUrgentLanguage(text)
+                LinkCount = links.Length,
+                ScriptCount = scripts.Length,
+                IframeCount = iframes.Length,
+                HiddenFieldCount = hiddenInputs.Length
             };
         }
-        catch 
+        catch
         {
-            return features with { ContentText = html };
+            // Fallback to simple string parsing
+            return new ContentFeatures
+            {
+                FormCount = CountOccurrences(html, "<form"),
+                InputFieldCount = CountOccurrences(html, "<input"),
+                LinkCount = CountOccurrences(html, "<a "),
+                ScriptCount = CountOccurrences(html, "<script"),
+                IframeCount = CountOccurrences(html, "<iframe"),
+                HiddenFieldCount = CountOccurrences(html, "type=\"hidden\"") + CountOccurrences(html, "type='hidden'")
+            };
         }
     }
 
-    private AdvancedFeatures ExtractVietnameseFeatures(AdvancedFeatures features, ScanRequest request)
+    private VietnameseContextFeatures AnalyzeVietnameseContext(string combinedText, string host)
     {
-        var text = (features.ContentText ?? request.Text ?? "").ToLowerInvariant();
-        
-        var vietnameseThreats = new List<string>();
-        
-        if (text.Contains("otp") || text.Contains("xác thực"))
-            vietnameseThreats.Add("otp_phishing");
-            
-        if (text.Contains("khóa tài khoản") || text.Contains("tạm khóa"))
-            vietnameseThreats.Add("account_suspension");
-            
-        if (text.Contains("ngân hàng") || VietnameseBanks.Any(bank => text.Contains(bank)))
-            vietnameseThreats.Add("banking_impersonation");
-            
-        // Add gambling detection
-        if (GamblingKeywords.Any(keyword => 
-            features.Host.Contains(keyword) || features.Path.Contains(keyword) || text.Contains(keyword)))
-            vietnameseThreats.Add("gambling_site");
-            
-        if (EmailPattern.IsMatch(text)) vietnameseThreats.Add("email_harvesting");
-        if (PhonePattern.IsMatch(text)) vietnameseThreats.Add("phone_harvesting");
-        if (CreditCardPattern.IsMatch(text)) vietnameseThreats.Add("card_harvesting");
+        var threats = new List<string>();
 
-        // FIXED: Only flag HTTP sensitive if actually HTTP AND not legitimate domain
-        bool isLegitimate = LegitimateVietnameseTlds.Any(tld => features.Host.EndsWith(tld));
-        if (features.Protocol == "http" && !isLegitimate && HasSensitiveOperations(features.Host, features.Path, text))
-            vietnameseThreats.Add("http_sensitive");
+        var isVietnameseBankDomain = VietnameseBanks.Any(bank => 
+            host.Contains(bank) && !host.EndsWith($"{bank}.com.vn") && !host.EndsWith($"{bank}.vn"));
 
-        return features with {
-            HasVietnamesePhishingKeywords = vietnameseThreats.Any(),
-            VietnameseThreats = vietnameseThreats.ToArray()
+        var hasPhishingKeywords = VietnamesePhishingKeywords.Any(keyword => 
+            combinedText.Contains(keyword));
+
+        var hasGamblingKeywords = VietnameseGamblingKeywords.Any(keyword => 
+            combinedText.Contains(keyword));
+
+        var hasUrgencyKeywords = VietnameseUrgencyKeywords.Any(keyword => 
+            combinedText.Contains(keyword));
+
+        // Detect specific Vietnamese threats
+        if (isVietnameseBankDomain) threats.Add("fake_vietnamese_bank");
+        if (hasGamblingKeywords) threats.Add("vietnamese_gambling");
+        if (hasPhishingKeywords && hasUrgencyKeywords) threats.Add("urgent_vietnamese_phishing");
+        if (VietnamesePhonePattern.IsMatch(combinedText)) threats.Add("vietnamese_phone_harvesting");
+
+        return new VietnameseContextFeatures
+        {
+            IsVietnameseBankDomain = isVietnameseBankDomain,
+            HasVietnamesePhishingKeywords = hasPhishingKeywords,
+            HasVietnameseGamblingKeywords = hasGamblingKeywords,
+            HasVietnameseUrgencyKeywords = hasUrgencyKeywords,
+            VietnameseThreats = threats.ToArray()
         };
     }
 
-    private bool HasSensitiveOperations(string host, string path, string text)
+    private SecurityFeatures AnalyzeSecurity(string protocol, string host, string html)
     {
-        var sensitiveKeywords = new[] { 
-            "login", "signin", "password", "otp", "verify", "bank", "payment", 
-            "credit", "card", "account", "wallet", "transfer", "deposit", "casino", "bet"
-        };
-        
-        return sensitiveKeywords.Any(keyword => 
-            host.Contains(keyword) || path.Contains(keyword) || text.Contains(keyword));
-    }
+        var isSuspiciousTld = SuspiciousTlds.Any(tld => host.EndsWith(tld));
+        var hasPunycode = host.Contains("xn--");
+        var hasSensitiveFields = SensitiveFieldPattern.IsMatch(html);
+        var hasRedirects = html.Contains("location.href") || html.Contains("window.location") || 
+                          html.Contains("meta http-equiv=\"refresh\"");
 
-    private float[] GenerateMLVector(AdvancedFeatures features)
-    {
-        // Generate 26+ numerical features for ML
-        return new float[] {
-            features.UrlLength,
-            features.HostLength,
-            features.PathLength,
-            features.SubdomainCount,
-            features.HyphenCount,
-            features.DigitCount,
-            features.SpecialCharCount,
-            (float)features.EntropyScore,
-            features.FormCount,
-            features.InputFieldCount,
-            features.ExternalLinkCount,
-            features.ImageCount,
-            features.ScriptCount,
-            features.SuspiciousKeywords.Length,
-            features.RedirectCount,
-            features.IsSuspiciousTld ? 1 : 0,
-            features.HasPunycode ? 1 : 0,
-            features.IsVietnameseBankDomain ? 1 : 0,
-            features.HasVietnamesePhishingKeywords ? 1 : 0,
-            features.HasSensitiveFields ? 1 : 0,
-            features.HasUrgencyLanguage ? 1 : 0,
-            features.DomainAge >= 0 ? features.DomainAge : -1,
-            features.VietnameseThreats.Length,
-            features.Port != 80 && features.Port != 443 ? 1 : 0,
-            features.Protocol == "https" ? 0 : 1, // HTTP penalty (0 for HTTPS, 1 for HTTP)
-            features.VietnameseThreats.Contains("gambling_site") ? 1 : 0, // Gambling penalty
-            IsLegitimateEducationalDomain(features.Host) ? 1 : 0 // Educational domain bonus
+        return new SecurityFeatures
+        {
+            IsSuspiciousTld = isSuspiciousTld,
+            HasPunycode = hasPunycode,
+            HasSensitiveFields = hasSensitiveFields,
+            HasRedirects = hasRedirects
         };
     }
 
-    private bool IsLegitimateEducationalDomain(string host)
+    private float[] GenerateNumericalFeatures(
+        UrlStructureFeatures url, 
+        ContentFeatures content, 
+        VietnameseContextFeatures vietnamese, 
+        SecurityFeatures security)
     {
-        return host.EndsWith(".edu.vn") || host.EndsWith(".ac.vn") || 
-               host.EndsWith(".gov.vn") || host.Contains("university") || 
-               host.Contains("college") || host.Contains("school");
+        return new float[]
+        {
+            // Basic features (7)
+            url.UrlLength,
+            url.HyphenCount,
+            url.DigitCount,
+            url.SubdomainCount,
+            url.PathDepth,
+            vietnamese.HasVietnamesePhishingKeywords ? 1 : 0,
+            vietnamese.IsVietnameseBankDomain ? 1 : 0,
+
+            // Advanced structural features (7)
+            url.HostLength,
+            url.PathLength,
+            url.QueryParameterCount,
+            url.FragmentLength,
+            url.SpecialCharCount,
+            (float)url.UrlEntropy,
+            security.IsSuspiciousTld ? 1 : 0,
+
+            // Content features (5)
+            content.FormCount,
+            content.InputFieldCount,
+            content.LinkCount,
+            content.ScriptCount,
+            content.IframeCount,
+
+            // Security & Vietnamese features (5)
+            security.HasPunycode ? 1 : 0,
+            security.HasSensitiveFields ? 1 : 0,
+            vietnamese.HasVietnameseGamblingKeywords ? 1 : 0,
+            vietnamese.HasVietnameseUrgencyKeywords ? 1 : 0,
+            vietnamese.VietnameseThreats.Length
+        };
     }
 
-    // Helper methods
     private double CalculateEntropy(string input)
     {
         if (string.IsNullOrEmpty(input)) return 0;
-        
+
         var frequency = input.GroupBy(c => c).ToDictionary(g => g.Key, g => g.Count());
         var length = input.Length;
         
-        return frequency.Values
-            .Select(count => (double)count / length)
-            .Select(p => -p * Math.Log2(p))
-            .Sum();
-    }
-
-    private string GetTopLevelDomain(string host)
-    {
-        var parts = host.Split('.');
-        return parts.Length >= 2 ? $".{parts[^1]}" : "";
-    }
-
-    private string GetFullTLD(string host)
-    {
-        // Handle Vietnamese multi-part TLDs like .edu.vn, .com.vn
-        var parts = host.Split('.');
-        if (parts.Length >= 3 && parts[^1] == "vn")
+        return -frequency.Values.Sum(count => 
         {
-            return $".{parts[^2]}.{parts[^1]}"; // .edu.vn, .com.vn
-        }
-        return parts.Length >= 2 ? $".{parts[^1]}" : "";
+            var probability = count / (double)length;
+            return probability * Math.Log2(probability);
+        });
     }
 
-    private bool IsExternalLink(string? href, string currentHost)
+    private int CountOccurrences(string text, string pattern)
     {
-        if (string.IsNullOrWhiteSpace(href) || !href.StartsWith("http")) return false;
-        try 
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(pattern))
+            return 0;
+
+        int count = 0;
+        int index = 0;
+        while ((index = text.IndexOf(pattern, index, StringComparison.OrdinalIgnoreCase)) != -1)
         {
-            var linkUri = new Uri(href);
-            return !linkUri.Host.Equals(currentHost, StringComparison.OrdinalIgnoreCase);
+            count++;
+            index += pattern.Length;
         }
-        catch { return false; }
+        return count;
     }
 
-    private bool HasSensitiveInputFields(IHtmlCollection<IElement> inputs)
+    // Legacy method for backward compatibility
+    public (string Host, string Path, string? Text) Extract(ScanRequest request)
     {
-        var sensitiveTypes = new[] { "password", "email", "tel", "number" };
-        var sensitiveNames = new[] { "password", "email", "phone", "otp", "pin", "ssn" };
-        
-        return inputs.Any(input => 
-            sensitiveTypes.Contains(input.GetAttribute("type")) ||
-            sensitiveNames.Any(name => 
-                (input.GetAttribute("name") ?? "").Contains(name, StringComparison.OrdinalIgnoreCase) ||
-                (input.GetAttribute("id") ?? "").Contains(name, StringComparison.OrdinalIgnoreCase)));
-    }
+        if (string.IsNullOrWhiteSpace(request.Url))
+            return ("", "", request.Text);
 
-    private bool HasUrgentLanguage(string text)
-    {
-        var urgentPhrases = new[] {
-            "urgent", "immediate", "expire", "suspend", "block", "emergency",
-            "khẩn cấp", "ngay lập tức", "hết hạn", "khóa", "chặn", "tạm dừng"
-        };
-        
-        return urgentPhrases.Any(phrase => 
-            text.Contains(phrase, StringComparison.OrdinalIgnoreCase));
+        try
+        {
+            var uri = new Uri(request.Url);
+            return (uri.Host, uri.AbsolutePath, request.Text);
+        }
+        catch
+        {
+            return (request.Url, "", request.Text);
+        }
     }
+}
+
+// Helper classes for organizing features
+internal class UrlStructureFeatures
+{
+    public int UrlLength { get; set; }
+    public int HostLength { get; set; }
+    public int PathLength { get; set; }
+    public int SubdomainCount { get; set; }
+    public int PathDepth { get; set; }
+    public int QueryParameterCount { get; set; }
+    public int FragmentLength { get; set; }
+    public int HyphenCount { get; set; }
+    public int DigitCount { get; set; }
+    public int SpecialCharCount { get; set; }
+    public double UrlEntropy { get; set; }
+}
+
+internal class ContentFeatures
+{
+    public int FormCount { get; set; }
+    public int InputFieldCount { get; set; }
+    public int LinkCount { get; set; }
+    public int ScriptCount { get; set; }
+    public int IframeCount { get; set; }
+    public int HiddenFieldCount { get; set; }
+}
+
+internal class VietnameseContextFeatures
+{
+    public bool IsVietnameseBankDomain { get; set; }
+    public bool HasVietnamesePhishingKeywords { get; set; }
+    public bool HasVietnameseGamblingKeywords { get; set; }
+    public bool HasVietnameseUrgencyKeywords { get; set; }
+    public string[] VietnameseThreats { get; set; } = Array.Empty<string>();
+}
+
+internal class SecurityFeatures
+{
+    public bool IsSuspiciousTld { get; set; }
+    public bool HasPunycode { get; set; }
+    public bool HasSensitiveFields { get; set; }
+    public bool HasRedirects { get; set; }
 }
