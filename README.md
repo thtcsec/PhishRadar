@@ -2,12 +2,29 @@
 
 Hệ thống phát hiện phishing chuyên biệt cho thị trường Việt Nam với AI thông minh.
 
-## 🐳 **Demo nhanh với Docker**
+## 🚀 **Demo nhanh - Multiple Options**
 
+### Option 1: .NET Direct (Fastest)
 ```bash
+# Yêu cầu: .NET 8 SDK
+git clone https://github.com/thtcsec/PhishRadar.git
+cd PhishRadar
+quick-start.bat  # Windows auto-start
+```
+
+### Option 2: Docker (Professional)
+```bash
+# Yêu cầu: Docker Desktop
 docker build -t phishradar .
 docker run --rm -p 5122:5122 phishradar
 curl -s http://localhost:5122/health
+```
+
+### Option 3: Smart Demo (Detects tools)
+```bash
+git clone https://github.com/thtcsec/PhishRadar.git
+cd PhishRadar
+demo.bat  # Tự động detect .NET/Docker
 ```
 
 ## ✨ Tính năng chính
@@ -17,69 +34,52 @@ curl -s http://localhost:5122/health
 - **Hiệu suất cao**: API nhanh, cache thông minh
 - **Dễ tích hợp**: REST API đơn giản
 
-## 🚀 Cài đặt nhanh
+## 📊 Test cases nhanh
 
-### Option 1: Docker (Recommended cho demo)
-```bash
-# Clone repository
-git clone https://github.com/thtcsec/PhishRadar.git
-cd PhishRadar
-
-# Demo 1-click
-demo.bat  # Windows
-
-# Hoặc manual
-docker build -t phishradar .
-docker run -p 5122:5122 phishradar
-```
-
-### Option 2: .NET Development
-```bash
-# Clone repository
-git clone https://github.com/thtcsec/PhishRadar.git
-cd PhishRadar
-
-# Setup training data (optional - có sample data sẵn)
-setup.bat
-
-# Chạy API
-cd src/Api
-dotnet run
-
-# Test
-curl http://localhost:5122/health
-```
-
-## 📊 Test cases
-
-### Kiểm tra Vietnamese banking phishing
+### Vietnamese banking phishing
 ```bash
 curl -X POST http://localhost:5122/score \
   -H "Content-Type: application/json" \
   -d '{"url": "http://vietcom-bank.tk/verify"}'
 ```
+→ **Expected**: Risk 85+ (HIGH RISK)
 
-### Phản hồi
-```json
-{
-  "risk": 85,
-  "reasons": ["🚨 FAKE: Vietnamese bank domain pattern", "⚠️ HTTP protocol"],
-  "recommendations": ["🚨 HIGH RISK - Do not enter personal information"]
-}
-```
-
-### Test Vietnamese gambling
+### Vietnamese gambling
 ```bash
 curl -X POST http://localhost:5122/score \
   -H "Content-Type: application/json" \
   -d '{"url": "http://nohu88.club"}'
 ```
+→ **Expected**: Risk 90+ (GAMBLING DETECTED)
 
-### Test safe site
+### Safe educational site
 ```bash
 curl -X POST http://localhost:5122/score \
   -H "Content-Type: application/json" \
   -d '{"url": "http://huflit.edu.vn"}'
+```
+→ **Expected**: Risk 0 (SAFE)
+
+## 🧪 **Automated Testing**
+```bash
+test.bat  # Chạy tất cả test cases
+```
+
+## 🔧 **Nếu thiếu dependencies**
+
+### .NET 8 SDK
+```
+https://dotnet.microsoft.com/download/dotnet/8.0
+```
+
+### Docker Desktop
+```
+https://www.docker.com/products/docker-desktop/
+```
+
+### Visual Studio 2022 (Free)
+```
+https://visualstudio.microsoft.com/vs/community/
 ```
 
 ## 🤖 Nâng cấp AI
@@ -128,6 +128,7 @@ src/
 
 - ✅ .NET 8
 - ✅ Docker ready
+- ✅ Multiple deployment options
 - ✅ Cache thông minh
 - ✅ Error handling
 - ✅ Health monitoring
@@ -135,8 +136,8 @@ src/
 
 ## 📖 Chi tiết
 
+- [DOCKER_DEMO.md](DOCKER_DEMO.md) - Demo options cho giám khảo
 - [USAGE.md](USAGE.md) - Hướng dẫn API đầy đủ
-- [DOCKER_DEMO.md](DOCKER_DEMO.md) - Demo cho giám khảo
 
 ## 📞 Hỗ trợ
 
