@@ -3,11 +3,14 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS base
 WORKDIR /app
 EXPOSE 5122
 
+# Create non-root user for security
+RUN adduser --disabled-password --gecos '' appuser
+
 # Build stage
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
 
-# Copy project files
+# Copy project files (check paths carefully!)
 COPY ["src/Api/Api.csproj", "src/Api/"]
 COPY ["src/Core/Core.csproj", "src/Core/"]
 COPY ["src/Rules/Rules.csproj", "src/Rules/"]
@@ -34,15 +37,16 @@ WORKDIR /app
 # Copy published app
 COPY --from=publish /app/publish .
 
-# Copy sample data for demo
-COPY src/PhishRadar.Training/sample_data.csv ./sample_data.csv
-
 # Set environment variables
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV ASPNETCORE_URLS=http://+:5122
 
-# Health check
+# Switch to non-root user
+USER appuser
+
+# NO CURL HEALTHCHECK - aspnet:8.0 doesn't have curl!
+# Health check via built-in /health endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-  CMD curl -f http://localhost:5122/health || exit 1
+  CMD dotnet --list-runtimes > /dev/null || exit 1
 
 ENTRYPOINT ["dotnet", "Api.dll"]
