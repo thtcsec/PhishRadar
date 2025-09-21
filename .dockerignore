@@ -1,0 +1,41 @@
+# Git
+.git
+.gitignore
+README.md
+USAGE.md
+CHANGES.md
+
+# Build artifacts
+**/bin
+**/obj
+**/.vs
+
+# Training data (large files)
+src/PhishRadar.Training/data_sources/
+src/PhishRadar.Training/merged_ready.csv
+src/PhishRadar.Training/production_models/
+*.csv
+!src/PhishRadar.Training/sample_data.csv
+
+# AI models (will be trained in runtime if needed)
+*.onnx
+*.joblib
+*.pkl
+
+# Development
+.vscode/
+.idea/
+*.user
+*.suo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Docker
+Dockerfile*
+docker-compose*
+.dockerignore
